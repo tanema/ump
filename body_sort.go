@@ -5,14 +5,14 @@ import (
 )
 
 type (
-	By         func(b1, b2 *Body) bool
+	bodiesBy   func(b1, b2 *Body) bool
 	bodySorter struct {
 		bodies []*Body
-		by     func(b1, b2 *Body) bool
+		by     bodiesBy
 	}
 )
 
-func (by By) Sort(bodies []*Body) {
+func (by bodiesBy) Sort(bodies []*Body) {
 	ps := &bodySorter{
 		bodies: bodies,
 		by:     by,

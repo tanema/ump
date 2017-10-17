@@ -6,20 +6,19 @@ import (
 
 var curBodyID uint32
 
-type (
-	Body struct {
-		ID      uint32
-		world   *World
-		tag     string
-		x       float32
-		y       float32
-		w       float32
-		h       float32
-		cells   []*Cell
-		static  bool
-		respMap map[string]string
-	}
-)
+// Body represents a rectangle that will collide with other rectangles/bodies
+type Body struct {
+	ID      uint32
+	world   *World
+	tag     string
+	x       float32
+	y       float32
+	w       float32
+	h       float32
+	cells   []*cell
+	static  bool
+	respMap map[string]string
+}
 
 func newBody(world *World, tag string, x, y, w, h float32) *Body {
 	id := atomic.AddUint32(&curBodyID, 1)
@@ -31,7 +30,7 @@ func newBody(world *World, tag string, x, y, w, h float32) *Body {
 		y:     y,
 		w:     w,
 		h:     h,
-		cells: []*Cell{},
+		cells: []*cell{},
 		respMap: map[string]string{
 			"default": defaultFilter,
 		},
@@ -40,6 +39,9 @@ func newBody(world *World, tag string, x, y, w, h float32) *Body {
 	return body
 }
 
+// Move moves a body to a new location and will return the point where the body
+// managed to get to (gx, gy). It will also return any collisions that happened
+// inbetween the movements.
 func (body *Body) Move(x, y float32) (gx, gy float32, cols []*Collision) {
 	actualX, actualY, collisions := body.check(x, y)
 	body.Update(actualX, actualY)
@@ -67,6 +69,7 @@ func (body *Body) check(goalX, goalY float32) (gx, gy float32, cols []*Collision
 	return goalX, goalY, collisions
 }
 
+// Update changes the position of the body with out checking for collisions
 func (body *Body) Update(x, y float32) {
 	if body.static || (body.x == x && body.y == y) {
 		return
@@ -75,9 +78,11 @@ func (body *Body) Update(x, y float32) {
 	body.world.grid.update(body)
 }
 
+// Remove will remove this body from the world and will no longer collide with
+// any other bodies.
 func (body *Body) Remove() {
-	for _, cell := range body.cells {
-		cell.leave(body)
+	for _, c := range body.cells {
+		c.leave(body)
 	}
 }
 
@@ -196,34 +201,45 @@ func (body *Body) distanceTo(other *Body) float32 {
 	return dx*dx + dy*dy
 }
 
+// Position will return the current position of the body.
 func (body *Body) Position() (x, y float32) {
 	return body.x, body.y
 }
 
+// Extents will return the position and size of the body
 func (body *Body) Extents() (x, y, w, h, r, b float32) {
 	return body.x, body.y, body.w, body.h, body.x + body.w, body.y + body.h
 }
 
+// IsStatic will return if the body is a static body or not. See SetStatic for why
+// it would be a static body
 func (body *Body) IsStatic() bool {
 	return body.static
 }
 
+// SetStatic will make this body static which means that other bodies will collide
+// with it but this body will skip collision check. This is good for optimizing
+// your collisions with items like walls and floors.
 func (body *Body) SetStatic(isStatic bool) {
 	body.static = isStatic
 }
 
+// GetResponses will return the response map set on this body
 func (body *Body) GetResponses() map[string]string {
 	return body.respMap
 }
 
+// SetResponses will set a map of responses for a body. This map defines how this
+// body will react to certain collisions. The map is formatted map[object_tag]filter_name
+// By default all items will collide and not resolve. To change the default behaviour
+// use the "default" entry in the response map. For instance on an item that would
+// bounce like a ball you would call `body.SetResponses(map[string]string{"default": "bounce"})
 func (body *Body) SetResponses(respMap map[string]string) {
 	body.respMap = respMap
 }
 
-func (body *Body) GetCells() []*Cell {
-	return body.cells
-}
-
+// GetResponse will return the filter name for the tag passed. If the tag is not
+// defined in the response map then the default reponse will be returned
 func (body *Body) GetResponse(tag string) string {
 	respType, ok := body.respMap[tag]
 	if !ok {
@@ -232,14 +248,18 @@ func (body *Body) GetResponse(tag string) string {
 	return respType
 }
 
+// SetResponse will set an entry in the response map for the provided tag.
 func (body *Body) SetResponse(tag, resp string) {
 	body.respMap[tag] = resp
 }
 
+// Tag will return the string tag for this body
 func (body *Body) Tag() string {
 	return body.tag
 }
 
+// HasTag will check a list of tags to see if this body matches any of them. This
+// is good for checking groups of object that collide.
 func (body *Body) HasTag(tags ...string) bool {
 	// This is so that when no tags are passed in, all tags are accepted
 	if tags == nil {

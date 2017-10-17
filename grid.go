@@ -4,41 +4,41 @@ import (
 	"math"
 )
 
-type Grid struct {
+type grid struct {
 	cellSize float32
-	rows     map[int]map[int]*Cell
+	rows     map[int]map[int]*cell
 }
 
-func newGrid(cellSize int) *Grid {
-	return &Grid{
+func newGrid(cellSize int) *grid {
+	return &grid{
 		cellSize: float32(cellSize),
-		rows:     make(map[int]map[int]*Cell),
+		rows:     make(map[int]map[int]*cell),
 	}
 }
 
-func (grid *Grid) update(body *Body) {
-	for _, cell := range body.cells {
-		cell.leave(body)
+func (g *grid) update(body *Body) {
+	for _, c := range body.cells {
+		c.leave(body)
 	}
-	body.cells = []*Cell{}
-	cl, ct, cw, ch := grid.toCellRect(body.x, body.y, body.w, body.h)
+	body.cells = []*cell{}
+	cl, ct, cw, ch := g.toCellRect(body.x, body.y, body.w, body.h)
 	for cy := ct; cy <= ct+ch-1; cy++ {
 		for cx := cl; cx <= cl+cw-1; cx++ {
-			grid.cellAt(float32(cx), float32(cy), true).enter(body)
+			g.cellAt(float32(cx), float32(cy), true).enter(body)
 		}
 	}
 }
 
-func (grid *Grid) cellsInRect(l, t, w, h float32) []*Cell {
-	cl, ct, cw, ch := grid.toCellRect(l, t, w, h)
-	cells := []*Cell{}
+func (g *grid) cellsInRect(l, t, w, h float32) []*cell {
+	cl, ct, cw, ch := g.toCellRect(l, t, w, h)
+	cells := []*cell{}
 	for cy := ct; cy <= ct+ch-1; cy++ {
-		row, ok := grid.rows[cy]
+		row, ok := g.rows[cy]
 		if ok {
 			for cx := cl; cx <= cl+cw-1; cx++ {
-				cell, ok := row[cx]
+				c, ok := row[cx]
 				if ok {
-					cells = append(cells, cell)
+					cells = append(cells, c)
 				}
 			}
 		}
@@ -46,47 +46,47 @@ func (grid *Grid) cellsInRect(l, t, w, h float32) []*Cell {
 	return cells
 }
 
-func (grid *Grid) toCellRect(x, y, w, h float32) (cx, cy, cw, ch int) {
-	cx, cy = grid.cellCoordsAt(x, y)
-	cr, cb := int(math.Ceil(float64((x+w)/grid.cellSize))), int(math.Ceil(float64((y+h)/grid.cellSize)))
+func (g *grid) toCellRect(x, y, w, h float32) (cx, cy, cw, ch int) {
+	cx, cy = g.cellCoordsAt(x, y)
+	cr, cb := int(math.Ceil(float64((x+w)/g.cellSize))), int(math.Ceil(float64((y+h)/g.cellSize)))
 	return cx, cy, cr - cx, cb - cy
 }
 
-func (grid *Grid) cellCoordsAt(x, y float32) (cx, cy int) {
-	return int(math.Floor(float64(x / grid.cellSize))), int(math.Floor(float64(y / grid.cellSize)))
+func (g *grid) cellCoordsAt(x, y float32) (cx, cy int) {
+	return int(math.Floor(float64(x / g.cellSize))), int(math.Floor(float64(y / g.cellSize)))
 }
 
-func (grid *Grid) cellAt(x, y float32, cellCoords bool) *Cell {
+func (g *grid) cellAt(x, y float32, cellCoords bool) *cell {
 	var cx, cy int
 	if cellCoords == true {
 		cx, cy = int(x), int(y)
 	} else {
-		cx, cy = grid.cellCoordsAt(x, y)
+		cx, cy = g.cellCoordsAt(x, y)
 	}
-	row, ok := grid.rows[cy]
+	row, ok := g.rows[cy]
 	if !ok {
-		grid.rows[cy] = make(map[int]*Cell)
-		row = grid.rows[cy]
+		g.rows[cy] = make(map[int]*cell)
+		row = g.rows[cy]
 	}
-	cell, ok := row[cx]
+	c, ok := row[cx]
 	if !ok {
-		row[cx] = &Cell{bodies: make(map[uint32]*Body)}
-		cell = row[cx]
+		row[cx] = &cell{bodies: make(map[uint32]*Body)}
+		c = row[cx]
 	}
-	return cell
+	return c
 }
 
-func (grid *Grid) getCellsTouchedBySegment(x1, y1, x2, y2 float32) []*Cell {
-	cells := []*Cell{}
-	visited := map[*Cell]bool{}
+func (g *grid) getCellsTouchedBySegment(x1, y1, x2, y2 float32) []*cell {
+	cells := []*cell{}
+	visited := map[*cell]bool{}
 
-	grid.traceRay(x1, y1, x2, y2, func(cx, cy int) {
-		cell := grid.cellAt(float32(cx), float32(cy), true)
-		if _, found := visited[cell]; found {
+	g.traceRay(x1, y1, x2, y2, func(cx, cy int) {
+		c := g.cellAt(float32(cx), float32(cy), true)
+		if _, found := visited[c]; found {
 			return
 		}
-		visited[cell] = true
-		cells = append(cells, cell)
+		visited[c] = true
+		cells = append(cells, c)
 	})
 
 	return cells
@@ -96,23 +96,23 @@ func (grid *Grid) getCellsTouchedBySegment(x1, y1, x2, y2 float32) []*Cell {
 // by John Amanides and Andrew Woo - http://www.cse.yorku.ca/~amana/research/grid.pdf
 // It has been modified to include both cells when the ray "touches a grid corner",
 // and with a different exit condition
-func (grid *Grid) rayStep(ct, t1, t2 float32) (int, float32, float32) {
+func (g *grid) rayStep(ct, t1, t2 float32) (int, float32, float32) {
 	v := t2 - t1
-	delta := grid.cellSize / v
+	delta := g.cellSize / v
 	if v > 0 {
-		return 1, delta, delta * (1.0 - frac(t1/grid.cellSize))
+		return 1, delta, delta * (1.0 - frac(t1/g.cellSize))
 	} else if v < 0 {
-		return -1, -delta, -delta * frac(t1/grid.cellSize)
+		return -1, -delta, -delta * frac(t1/g.cellSize)
 	} else {
 		return 0, inf, inf
 	}
 }
 
-func (grid *Grid) traceRay(x1, y1, x2, y2 float32, f func(cx, cy int)) {
-	cx1, cy1 := grid.cellCoordsAt(x1, y1)
-	cx2, cy2 := grid.cellCoordsAt(x2, y2)
-	stepX, dx, tx := grid.rayStep(float32(cx1), x1, x2)
-	stepY, dy, ty := grid.rayStep(float32(cy1), y1, y2)
+func (g *grid) traceRay(x1, y1, x2, y2 float32, f func(cx, cy int)) {
+	cx1, cy1 := g.cellCoordsAt(x1, y1)
+	cx2, cy2 := g.cellCoordsAt(x2, y2)
+	stepX, dx, tx := g.rayStep(float32(cx1), x1, x2)
+	stepY, dy, ty := g.rayStep(float32(cy1), y1, y2)
 	cx, cy := cx1, cy1
 
 	f(cx, cy)

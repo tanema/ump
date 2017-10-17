@@ -1,17 +1,17 @@
 package ump
 
-type Cell struct {
+type cell struct {
 	bodies    map[uint32]*Body
 	itemCount int
 }
 
-func (cell *Cell) enter(body *Body) {
-	cell.bodies[body.ID] = body
-	body.cells = append(body.cells, cell)
-	cell.itemCount = len(cell.bodies)
+func (c *cell) enter(body *Body) {
+	c.bodies[body.ID] = body
+	body.cells = append(body.cells, c)
+	c.itemCount = len(c.bodies)
 }
 
-func (cell *Cell) leave(body *Body) {
-	delete(cell.bodies, body.ID)
-	cell.itemCount = len(cell.bodies)
+func (c *cell) leave(body *Body) {
+	delete(c.bodies, body.ID)
+	c.itemCount = len(c.bodies)
 }

@@ -3,20 +3,30 @@ package ump
 import (
 	"math"
 	"sort"
-
-	"github.com/tanema/amore/gfx"
 )
 
 const defaultFilter = "slide"
 
 type (
+	// World is the virtual world in which all these collisions happen. The world
+	// contains a grid, which contains several cells, which contains collidable bodies.
+	//
+	// A world also has registered responses to filter collisions please see Resp for this.
 	World struct {
-		grid      *Grid
+		grid      *grid
 		responses map[string]Resp
 	}
+	// Resp is a function that will handle and resolve a collision. For instance
+	// the bound filter will return the bounce goal gx gy, and then project for the
+	// new direction to make sure there are not collisions in that direction.
 	Resp func(world *World, col *Collision, body *Body, goalX, goalY float32) (gx, gy float32, cols []*Collision)
 )
 
+// NewWorld builds a physics world with the provided cell size. A good default is 64.
+// It represents the size of the sides of the (squared) cells that will be used
+// internally to provide the data. In tile based games, it's usually a multiple
+// of the tile side size. So in a game where tiles are 32x32, cellSize will be 32,
+// 64 or 128. In more sparse games, it can be higher.
 func NewWorld(cellSize int) *World {
 	world := &World{
 		grid:      newGrid(cellSize),
@@ -29,21 +39,35 @@ func NewWorld(cellSize int) *World {
 	return world
 }
 
+// Add will create a new Body to be tracked in this world. The tag is important.
+// It is used to decided which filter to use but also for you to decide what to
+// do when a body collides with your new body.
+//
+// left, top, w, and h describe a rectangle for the body to inhabit.
 func (world *World) Add(tag string, left, top, w, h float32) *Body {
 	return newBody(world, tag, left, top, w, h)
 }
 
+// QueryRect will take the rectangle arguments and return any bodies that are in
+// that rectangle
+//
+// If tags are passed into the query then it will only return the bodies with those
+// tags.
 func (world *World) QueryRect(x, y, w, h float32, tags ...string) []*Body {
 	return world.getBodiesInCells(world.grid.cellsInRect(x, y, w, h), tags...)
 }
 
+// QueryPoint will return any bodies that are underneathe the point.
+//
+// If tags are passed into the query then it will only return the bodies with those
+// tags.
 func (world *World) QueryPoint(x, y float32, tags ...string) []*Body {
 	bodies := []*Body{}
-	cell := world.grid.cellAt(x, y, false)
-	if cell == nil {
+	c := world.grid.cellAt(x, y, false)
+	if c == nil {
 		return []*Body{}
 	}
-	for _, body := range cell.bodies {
+	for _, body := range c.bodies {
 		if body.HasTag(tags...) && body.containsPoint(x, y) {
 			bodies = append(bodies, body)
 		}
@@ -51,6 +75,10 @@ func (world *World) QueryPoint(x, y float32, tags ...string) []*Body {
 	return bodies
 }
 
+// QuerySegment will return any bodies that are underneathe the segment/line.
+//
+// If tags are passed into the query then it will only return the bodies with those
+// tags.
 func (world *World) QuerySegment(x1, y1, x2, y2 float32, tags ...string) []*Body {
 	bodies := []*Body{}
 	visited := map[*Body]bool{}
@@ -68,18 +96,18 @@ func (world *World) QuerySegment(x1, y1, x2, y2 float32, tags ...string) []*Body
 		}
 	}
 
-	By(func(b1, b2 *Body) bool {
+	bodiesBy(func(b1, b2 *Body) bool {
 		return distances[b1.ID] < distances[b2.ID]
 	}).Sort(bodies)
 
 	return bodies
 }
 
-func (world *World) getBodiesInCells(cells []*Cell, tags ...string) []*Body {
+func (world *World) getBodiesInCells(cells []*cell, tags ...string) []*Body {
 	dict := make(map[uint32]bool)
 	bodies := []*Body{}
-	for _, cell := range cells {
-		for id, body := range cell.bodies {
+	for _, c := range cells {
+		for id, body := range c.bodies {
 			if _, ok := dict[id]; !ok && body.HasTag(tags...) {
 				bodies = append(bodies, body)
 				dict[id] = true
@@ -89,6 +117,9 @@ func (world *World) getBodiesInCells(cells []*Cell, tags ...string) []*Body {
 	return bodies
 }
 
+// Project will project the goal location of the provided body but not move it.
+// This is good for checking a future location of a body and see if there are any
+// collisions in that space.
 func (world *World) Project(body *Body, goalX, goalY float32) []*Collision {
 	collisions := []*Collision{}
 
@@ -108,32 +139,13 @@ func (world *World) Project(body *Body, goalX, goalY float32) []*Collision {
 		}
 	}
 
-	sort.Sort(CollisionsByDistance(collisions))
+	sort.Sort(collisionsByDistance(collisions))
 
 	return collisions
 }
 
+// AddResponse will add a new filter response for this world. This is helpful if
+// you are creating custom reactions in your world.
 func (world *World) AddResponse(name string, response Resp) {
 	world.responses[name] = response
-}
-
-func (world *World) DrawDebug(l, t, w, h float32) {
-	cellSize := world.grid.cellSize
-	cl, ct, cw, ch := world.grid.toCellRect(l, t, w, h)
-	for cy := ct; cy <= ct+ch-1; cy++ {
-		row, ok := world.grid.rows[cy]
-		if ok {
-			for cx := cl; cx <= cl+cw-1; cx++ {
-				cell, ok := row[cx]
-				if ok {
-					l, t, w, h := float32(cx)*cellSize, float32(cy)*cellSize, cellSize, cellSize
-					intensity := cell.itemCount*12 + 16
-					gfx.SetColor(255, 255, 255, float32(intensity))
-					gfx.Rect(gfx.FILL, l, t, w, h)
-					gfx.SetColor(255, 255, 255, 10)
-					gfx.Rect(gfx.LINE, l, t, w, h)
-				}
-			}
-		}
-	}
 }
