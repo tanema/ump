@@ -1,4 +1,4 @@
-# Ump
+# Ump [![](https://godoc.org/github.com/tanema/ump?status.svg)](http://godoc.org/github.com/tanema/ump)
 
 Go collision-detection library for axis-aligned rectangles. Its main features are:
 
